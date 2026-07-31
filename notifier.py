@@ -1,12 +1,16 @@
 import sys
 import os
 import time
-import winsound
 import subprocess
 import json
 import urllib.request
 
-# Fix Windows console encoding
+try:
+    import winsound
+except ImportError:
+    winsound = None
+
+# Fix console encoding
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
@@ -20,6 +24,8 @@ class Notifier:
 
     def trigger_audio_chime(self):
         """Play a loud, distinctive victory chime when tickets are found."""
+        if not winsound:
+            return
         try:
             tones = [(523, 150), (659, 150), (784, 150), (1046, 400)]
             for freq, duration in tones:
@@ -29,7 +35,7 @@ class Notifier:
 
     def show_desktop_toast(self, title, message):
         """Display a Windows desktop toast balloon notification."""
-        if not self.desktop_notification:
+        if not self.desktop_notification or os.name != 'nt':
             return
         
         try:
