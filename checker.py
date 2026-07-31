@@ -134,7 +134,7 @@ def is_location_match(loc_name: str, loc_id: int, target_locations: list) -> boo
             return True
     return False
 
-def run_checker_once(notified_releases=None) -> bool:
+def run_checker_once(notified_releases=None, page=None) -> bool:
     if notified_releases is None:
         notified_releases = set()
 
@@ -166,7 +166,7 @@ def run_checker_once(notified_releases=None) -> bool:
         telegram_chat_id=config.get("telegram_chat_id", "")
     )
 
-    api = CineplexAPI(auth_token)
+    api = CineplexAPI(auth_token, page=page)
     locations = api.get_locations()
 
     if not locations and email and password:

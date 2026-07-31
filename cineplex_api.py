@@ -6,9 +6,13 @@ from typing import Dict, List, Any, Optional
 class CineplexAPI:
     BASE_URL = "https://cineplex-ticket-api.cineplexbd.com/api/v1"
 
-    def __init__(self, auth_token: str):
+    def __init__(self, auth_token: str, page=None):
         self.auth_token = auth_token.strip()
+        self.page = page
         self.headers = self._build_headers()
+
+    def set_page(self, page):
+        self.page = page
 
     def _generate_device_key(self) -> str:
         """Generates SHA-256 device-key used by Cineplex web application."""
@@ -43,6 +47,37 @@ class CineplexAPI:
 
     def _post(self, endpoint: str, payload: dict = {}) -> Optional[dict]:
         url = f"{self.BASE_URL}/{endpoint}"
+
+        # If Playwright browser page is active, use in-browser fetch to bypass Cloudflare 403
+        if self.page:
+            try:
+                device_key = self._generate_device_key()
+                token = self.auth_token.replace("Bearer ", "") if self.auth_token else ""
+                result = self.page.evaluate('''async ({url, payload, token, deviceKey}) => {
+                    const res = await fetch(url, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "Origin": "https://ticket.cineplexbd.com",
+                            "Referer": "https://ticket.cineplexbd.com/",
+                            "appsource": "web",
+                            "device-key": deviceKey,
+                            "Authorization": "Bearer " + token
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    return await res.json();
+                }''', {"url": url, "payload": payload, "token": token, "deviceKey": device_key})
+                
+                if result and (result.get('code') == 401 or 'Unauthenticated' in str(result.get('message', ''))):
+                    print("❌ Error 401: Authentication Token is invalid or expired!")
+                    return {"error": "unauthenticated", "message": result.get('message')}
+                return result
+            except Exception as e:
+                print(f"⚠️ Playwright in-browser fetch error for {endpoint}: {e}")
+
+        # Fallback to requests.post
         try:
             resp = requests.post(url, json=payload, headers=self.headers, timeout=10)
             if resp.status_code == 200:
