@@ -232,12 +232,28 @@ def run_checker():
     notified_releases = set()
     check_count = 0
 
+    page = None
+    try:
+        from playwright.sync_api import sync_playwright
+        p = sync_playwright().start()
+        print("[*] Launching Playwright browser instance...")
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        page = context.new_page()
+        print("[*] Navigating to https://ticket.cineplexbd.com/ ...")
+        page.goto("https://ticket.cineplexbd.com/", wait_until="networkidle", timeout=35000)
+    except Exception as e:
+        print(f"ℹ️ Playwright browser not initialized ({e}). Using direct HTTP mode.")
+
     while True:
         check_count += 1
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{current_time}] 🔍 Check #{check_count}: Querying Cineplex API...")
 
-        run_checker_once(notified_releases)
+        try:
+            run_checker_once(notified_releases, page=page)
+        except Exception as e:
+            print(f"⚠️ Check #{check_count} error: {e}")
 
         print(f"⏳ Waiting {check_interval} seconds until next check...")
         time.sleep(check_interval)
