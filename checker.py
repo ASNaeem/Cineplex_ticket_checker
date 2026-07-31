@@ -1,0 +1,214 @@
+import os
+import sys
+import time
+import json
+import re
+from datetime import datetime
+from cineplex_api import CineplexAPI
+from notifier import Notifier
+
+ENV_FILE = ".env"
+CONFIG_FILE = "config.json"
+
+def load_env_file(filepath: str) -> dict:
+    env_vars = {}
+    if os.path.exists(filepath):
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, val = line.split('=', 1)
+                env_vars[key.strip()] = val.strip().strip('"').strip("'")
+    return env_vars
+
+def load_config() -> dict:
+    config = {}
+    # Load from config.json if exists
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            try:
+                config.update(json.load(f))
+            except Exception:
+                pass
+
+    # Load from .env (overrides config.json)
+    env_vars = load_env_file(ENV_FILE)
+    if env_vars.get("AUTH_TOKEN"):
+        config["auth_token"] = env_vars["AUTH_TOKEN"]
+    if env_vars.get("TARGET_MOVIES"):
+        config["target_movies"] = [m.strip() for m in env_vars["TARGET_MOVIES"].split(",") if m.strip()]
+    if env_vars.get("TARGET_DATES"):
+        config["target_dates"] = [d.strip() for d in env_vars["TARGET_DATES"].split(",") if d.strip()]
+    if env_vars.get("TARGET_LOCATIONS"):
+        config["target_locations"] = [l.strip() for l in env_vars["TARGET_LOCATIONS"].split(",") if l.strip()]
+    if env_vars.get("CHECK_INTERVAL_SECONDS"):
+        try:
+            config["check_interval_seconds"] = int(env_vars["CHECK_INTERVAL_SECONDS"])
+        except ValueError:
+            pass
+    if env_vars.get("SOUND_ALERT"):
+        config["sound_alert"] = env_vars["SOUND_ALERT"].lower() in ("true", "1", "yes")
+    if env_vars.get("DESKTOP_NOTIFICATION"):
+        config["desktop_notification"] = env_vars["DESKTOP_NOTIFICATION"].lower() in ("true", "1", "yes")
+    if env_vars.get("WEBHOOK_URL"):
+        config["webhook_url"] = env_vars["WEBHOOK_URL"]
+    if env_vars.get("TELEGRAM_BOT_TOKEN"):
+        config["telegram_bot_token"] = env_vars["TELEGRAM_BOT_TOKEN"]
+    if env_vars.get("TELEGRAM_CHAT_ID"):
+        config["telegram_chat_id"] = env_vars["TELEGRAM_CHAT_ID"]
+
+    return config
+
+def normalize_title(t: str) -> str:
+    """Removes spaces and punctuation for robust movie title matching."""
+    return re.sub(r'[^a-zA-Z0-9]', '', str(t)).lower()
+
+def is_movie_match(movie_title: str, target_movies: list) -> bool:
+    if not target_movies or "ALL" in [m.upper() for m in target_movies]:
+        return True
+    norm_title = normalize_title(movie_title)
+    for target in target_movies:
+        norm_target = normalize_title(target)
+        if norm_target in norm_title or norm_title in norm_target:
+            return True
+    return False
+
+def is_date_match(show_date_str: str, target_dates: list) -> bool:
+    if not target_dates or "ALL" in [d.upper() for d in target_dates]:
+        return True
+    
+    # Direct match or YYYY-MM-DD match
+    for d in target_dates:
+        d_clean = d.strip()
+        if d_clean == show_date_str:
+            return True
+        # Handle '4th aug' or 'aug 4' conversion to 2026-08-04
+        if "4" in d_clean and ("aug" in d_clean.lower() or "08" in d_clean):
+            if show_date_str.endswith("08-04") or show_date_str.endswith("8-4"):
+                return True
+    return False
+
+def is_location_match(loc_name: str, loc_id: int, target_locations: list) -> bool:
+    if not target_locations or "ALL" in [str(l).upper() for l in target_locations]:
+        return True
+    loc_name_lower = loc_name.lower()
+    for target in target_locations:
+        target_str = str(target).lower()
+        if target_str in loc_name_lower or target_str == str(loc_id):
+            return True
+    return False
+
+def run_checker_once(notified_releases=None) -> bool:
+    if notified_releases is None:
+        notified_releases = set()
+
+    config = load_config()
+    auth_token = config.get("auth_token", "")
+    email = config.get("CINEPLEX_EMAIL", "")
+    password = config.get("CINEPLEX_PASSWORD", "")
+
+    if (not auth_token or auth_token == "PASTE_YOUR_BEARER_TOKEN_HERE") and email and password:
+        try:
+            from auto_login import auto_login_and_get_token
+            auth_token = auto_login_and_get_token(email, password)
+        except Exception:
+            pass
+
+    if not auth_token:
+        print("❌ Auth token missing.")
+        return False
+
+    target_movies = config.get("target_movies", ["Spider-Man: Brand New Day"])
+    target_dates = config.get("target_dates", ["ALL"])
+    target_locations = config.get("target_locations", ["ALL"])
+
+    notifier = Notifier(
+        sound_alert=config.get("sound_alert", True),
+        desktop_notification=config.get("desktop_notification", True),
+        webhook_url=config.get("webhook_url", ""),
+        telegram_bot_token=config.get("telegram_bot_token", ""),
+        telegram_chat_id=config.get("telegram_chat_id", "")
+    )
+
+    api = CineplexAPI(auth_token)
+    locations = api.get_locations()
+
+    if not locations and email and password:
+        try:
+            from auto_login import auto_login_and_get_token
+            new_token = auto_login_and_get_token(email, password)
+            if new_token:
+                api.update_token(new_token)
+                locations = api.get_locations()
+        except Exception:
+            pass
+
+    if not locations:
+        print("⚠️ No locations returned.")
+        return False
+
+    match_found = False
+    for loc in locations:
+        loc_id = loc.get("id") or loc.get("locationId") or loc.get("location_id")
+        loc_name = loc.get("name") or loc.get("locationName") or loc.get("location_name") or f"Location #{loc_id}"
+
+        if not is_location_match(loc_name, loc_id, target_locations):
+            continue
+
+        showdates = api.get_showdates(loc_id)
+        for sd in showdates:
+            show_date = sd.get("showDate") or sd.get("date") or sd.get("show_date")
+            if not show_date:
+                continue
+
+            if is_date_match(show_date, target_dates):
+                shows = api.get_shows(loc_id, show_date)
+                for show in shows:
+                    movie_title = show.get("movieName") or show.get("title") or show.get("name") or ""
+                    if is_movie_match(movie_title, target_movies):
+                        match_key = f"{loc_id}_{show_date}_{movie_title}"
+                        match_found = True
+                        print(f"  🎉 FOUND! Movie: '{movie_title}' | Location: '{loc_name}' | Date: '{show_date}'")
+
+                        if match_key not in notified_releases:
+                            notified_releases.add(match_key)
+                            booking_url = f"https://ticket.cineplexbd.com/home?location_id={loc_id}&date={show_date}"
+                            notifier.notify_release(movie_title, loc_name, show_date, booking_url)
+
+    if not match_found:
+        print("  ℹ️ No tickets released yet for target criteria.")
+
+    return match_found
+
+def run_checker():
+    config = load_config()
+    check_interval = config.get("check_interval_seconds", 30)
+
+    print("\n🎬 =====================================================")
+    print("🎟️ CINEPLEX BD AUTOMATED TICKET CHECKER INITIALIZED")
+    print("=====================================================")
+    print(f"🎯 Target Movie(s)   : {', '.join(config.get('target_movies', []))}")
+    print(f"📅 Target Date(s)    : {', '.join(config.get('target_dates', []))}")
+    print(f"📍 Target Location(s): {', '.join(map(str, config.get('target_locations', [])))}")
+    print(f"⏱️ Check Interval   : Every {check_interval} seconds")
+    print("=====================================================\n")
+
+    notified_releases = set()
+    check_count = 0
+
+    while True:
+        check_count += 1
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{current_time}] 🔍 Check #{check_count}: Querying Cineplex API...")
+
+        run_checker_once(notified_releases)
+
+        print(f"⏳ Waiting {check_interval} seconds until next check...")
+        time.sleep(check_interval)
+
+if __name__ == "__main__":
+    try:
+        run_checker()
+    except KeyboardInterrupt:
+        print("\n👋 Ticket checker stopped by user.")

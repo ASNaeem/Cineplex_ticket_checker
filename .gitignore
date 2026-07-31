@@ -1,0 +1,23 @@
+# Environment variables & secrets (NEVER PUSH THESE TO GIT!)
+.env
+config.json
+
+# Python cache & virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+env/
+venv/
+ENV/
+
+# Playwright & browser binaries
+.playwright/
+ms-playwright/
+downloads/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
