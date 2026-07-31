@@ -30,9 +30,9 @@ jobs:
           AUTH_TOKEN: "${{ secrets.AUTH_TOKEN }}"
           CINEPLEX_EMAIL: "${{ secrets.CINEPLEX_EMAIL }}"
           CINEPLEX_PASSWORD: "${{ secrets.CINEPLEX_PASSWORD }}"
-          TARGET_MOVIES: "${{ secrets.TARGET_MOVIES }}"
-          TARGET_DATES: "${{ secrets.TARGET_DATES }}"
-          TARGET_LOCATIONS: "${{ secrets.TARGET_LOCATIONS }}"
+          TARGET_MOVIES: "${{ vars.TARGET_MOVIES || secrets.TARGET_MOVIES || 'Spider-Man: Brand New Day' }}"
+          TARGET_DATES: "${{ vars.TARGET_DATES || secrets.TARGET_DATES || '2026-08-04' }}"
+          TARGET_LOCATIONS: "${{ vars.TARGET_LOCATIONS || secrets.TARGET_LOCATIONS || 'ALL' }}"
           TELEGRAM_BOT_TOKEN: "${{ secrets.TELEGRAM_BOT_TOKEN }}"
           TELEGRAM_CHAT_ID: "${{ secrets.TELEGRAM_CHAT_ID }}"
         run: |
