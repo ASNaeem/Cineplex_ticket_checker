@@ -2,7 +2,7 @@ name: Cineplex Ticket Checker (30-Sec Interval)
 
 on:
   schedule:
-    # Trigger workflow every 5 minutes
+    # Trigger workflow every 5 minutes automatically
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
@@ -27,6 +27,8 @@ jobs:
 
       - name: Run 30-Second Loop for 5 Minutes
         env:
+          PYTHONIOENCODING: "utf-8"
+          PYTHONUNBUFFERED: "1"
           AUTH_TOKEN: "${{ secrets.AUTH_TOKEN }}"
           CINEPLEX_EMAIL: "${{ secrets.CINEPLEX_EMAIL }}"
           CINEPLEX_PASSWORD: "${{ secrets.CINEPLEX_PASSWORD }}"
@@ -36,15 +38,4 @@ jobs:
           TELEGRAM_BOT_TOKEN: "${{ secrets.TELEGRAM_BOT_TOKEN }}"
           TELEGRAM_CHAT_ID: "${{ secrets.TELEGRAM_CHAT_ID }}"
         run: |
-          python -c "
-          import time
-          from checker import run_checker_once
-          
-          # Perform 10 checks spaced 30 seconds apart (total 5 minutes)
-          for i in range(10):
-              print(f'--- Cloud Check Iteration {i+1}/10 ---')
-              found = run_checker_once()
-              if found:
-                  print('🎉 Match found! Notification dispatched.')
-              time.sleep(30)
-          "
+          python .github/run_cloud.py
