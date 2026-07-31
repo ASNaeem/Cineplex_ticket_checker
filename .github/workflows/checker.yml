@@ -5,6 +5,8 @@ on:
     # Trigger workflow every 5 minutes automatically
     - cron: '*/5 * * * *'
   workflow_dispatch:
+  repository_dispatch:
+    types: [check_tickets]
 
 jobs:
   check-tickets:
