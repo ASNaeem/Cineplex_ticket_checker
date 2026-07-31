@@ -24,7 +24,6 @@ def load_env_file(filepath: str) -> dict:
 
 def load_config() -> dict:
     config = {}
-    # Load from config.json if exists
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             try:
@@ -32,31 +31,67 @@ def load_config() -> dict:
             except Exception:
                 pass
 
-    # Load from .env (overrides config.json)
     env_vars = load_env_file(ENV_FILE)
-    if env_vars.get("AUTH_TOKEN"):
-        config["auth_token"] = env_vars["AUTH_TOKEN"]
-    if env_vars.get("TARGET_MOVIES"):
-        config["target_movies"] = [m.strip() for m in env_vars["TARGET_MOVIES"].split(",") if m.strip()]
-    if env_vars.get("TARGET_DATES"):
-        config["target_dates"] = [d.strip() for d in env_vars["TARGET_DATES"].split(",") if d.strip()]
-    if env_vars.get("TARGET_LOCATIONS"):
-        config["target_locations"] = [l.strip() for l in env_vars["TARGET_LOCATIONS"].split(",") if l.strip()]
-    if env_vars.get("CHECK_INTERVAL_SECONDS"):
+
+    def get_var(key, default=""):
+        val = os.environ.get(key)
+        if val is not None and val.strip():
+            return val.strip()
+        val = env_vars.get(key)
+        if val is not None and val.strip():
+            return val.strip()
+        return default
+
+    auth_token = get_var("AUTH_TOKEN")
+    if auth_token:
+        config["auth_token"] = auth_token
+
+    email = get_var("CINEPLEX_EMAIL")
+    if email:
+        config["CINEPLEX_EMAIL"] = email
+
+    password = get_var("CINEPLEX_PASSWORD")
+    if password:
+        config["CINEPLEX_PASSWORD"] = password
+
+    movies = get_var("TARGET_MOVIES")
+    if movies:
+        config["target_movies"] = [m.strip() for m in movies.split(",") if m.strip()]
+
+    dates = get_var("TARGET_DATES")
+    if dates:
+        config["target_dates"] = [d.strip() for d in dates.split(",") if d.strip()]
+
+    locations = get_var("TARGET_LOCATIONS")
+    if locations:
+        config["target_locations"] = [l.strip() for l in locations.split(",") if l.strip()]
+
+    interval = get_var("CHECK_INTERVAL_SECONDS")
+    if interval:
         try:
-            config["check_interval_seconds"] = int(env_vars["CHECK_INTERVAL_SECONDS"])
+            config["check_interval_seconds"] = int(interval)
         except ValueError:
             pass
-    if env_vars.get("SOUND_ALERT"):
-        config["sound_alert"] = env_vars["SOUND_ALERT"].lower() in ("true", "1", "yes")
-    if env_vars.get("DESKTOP_NOTIFICATION"):
-        config["desktop_notification"] = env_vars["DESKTOP_NOTIFICATION"].lower() in ("true", "1", "yes")
-    if env_vars.get("WEBHOOK_URL"):
-        config["webhook_url"] = env_vars["WEBHOOK_URL"]
-    if env_vars.get("TELEGRAM_BOT_TOKEN"):
-        config["telegram_bot_token"] = env_vars["TELEGRAM_BOT_TOKEN"]
-    if env_vars.get("TELEGRAM_CHAT_ID"):
-        config["telegram_chat_id"] = env_vars["TELEGRAM_CHAT_ID"]
+
+    sound = get_var("SOUND_ALERT")
+    if sound:
+        config["sound_alert"] = str(sound).lower() in ("true", "1", "yes")
+
+    desktop = get_var("DESKTOP_NOTIFICATION")
+    if desktop:
+        config["desktop_notification"] = str(desktop).lower() in ("true", "1", "yes")
+
+    webhook = get_var("WEBHOOK_URL")
+    if webhook:
+        config["webhook_url"] = webhook
+
+    tg_token = get_var("TELEGRAM_BOT_TOKEN")
+    if tg_token:
+        config["telegram_bot_token"] = tg_token
+
+    tg_chat = get_var("TELEGRAM_CHAT_ID")
+    if tg_chat:
+        config["telegram_chat_id"] = tg_chat
 
     return config
 
