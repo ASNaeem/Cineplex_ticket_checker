@@ -48,6 +48,13 @@ def main():
                     submit_btn.click()
                 time.sleep(5)
 
+                user_info_raw = page.evaluate("() => localStorage.getItem('userInfo')")
+                if user_info_raw:
+                    token = json.loads(user_info_raw).get("token")
+                    if token:
+                        os.environ["AUTH_TOKEN"] = token
+                        print(f"✅ Token retrieved & stored for block reuse: {token[:20]}...")
+
             notified_releases = set()
             for i in range(10):
                 print(f"\n--- ⏱️ Cloud Iteration {i+1}/10 ---")
