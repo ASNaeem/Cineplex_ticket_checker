@@ -34,6 +34,13 @@ def main():
         page = context.new_page()
 
         try:
+            print("[*] Establishing Cloudflare clearance session on https://ticket.cineplexbd.com/ ...")
+            try:
+                page.goto("https://ticket.cineplexbd.com/", wait_until="domcontentloaded", timeout=35000)
+                time.sleep(2)
+            except Exception as nav_err:
+                print(f"⚠️ Page navigation warning: {nav_err}")
+
             current_token = cfg.get("auth_token", "") or os.environ.get("AUTH_TOKEN", "")
             from cineplex_api import CineplexAPI
             test_api = CineplexAPI(current_token, page=page)
