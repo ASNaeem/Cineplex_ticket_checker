@@ -171,16 +171,15 @@ def run_checker_once(notified_releases=None, page=None) -> bool:
 
     if not locations and email and password:
         try:
-            from auto_login import auto_login_and_get_token
-            new_token = auto_login_and_get_token(email, password)
+            from auto_login import perform_login_on_page, auto_login_and_get_token
+            if page:
+                new_token = perform_login_on_page(page, email, password)
+            else:
+                new_token = auto_login_and_get_token(email, password)
+
             if new_token:
                 os.environ["AUTH_TOKEN"] = new_token
                 api.update_token(new_token)
-                if page:
-                    try:
-                        page.evaluate("(t) => localStorage.setItem('userInfo', JSON.stringify({token: t}))", new_token)
-                    except Exception:
-                        pass
                 locations = api.get_locations()
         except Exception as e:
             print(f"⚠️ Automatic token refresh failed: {e}")

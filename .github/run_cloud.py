@@ -34,38 +34,12 @@ def main():
         page = context.new_page()
 
         try:
-            print("[*] Navigating to https://ticket.cineplexbd.com/login ...")
-            page.goto("https://ticket.cineplexbd.com/login", wait_until="networkidle", timeout=35000)
-
             if email and password:
-                print(f"[*] Logging in user '{email}'...")
-                try:
-                    page.wait_for_selector("input", timeout=15000)
-                    inputs = page.query_selector_all("input")
-                    if len(inputs) >= 2:
-                        inputs[0].fill(email)
-                        inputs[1].fill(password)
-                        submit_btn = page.query_selector("button[type='submit']") or page.query_selector("button")
-                        if submit_btn:
-                            submit_btn.click()
-                        time.sleep(6)
-                except Exception as login_err:
-                    print(f"⚠️ Initial browser form fill error: {login_err}")
-
-                user_info_raw = page.evaluate("() => localStorage.getItem('userInfo')")
-                if user_info_raw:
-                    try:
-                        user_info = json.loads(user_info_raw)
-                        token = user_info.get("token") if isinstance(user_info, dict) else None
-                        if token:
-                            os.environ["AUTH_TOKEN"] = token
-                            print(f"✅ Token retrieved & stored for block reuse: {token[:20]}...")
-                        else:
-                            print("⚠️ 'userInfo' found in localStorage, but missing token.")
-                    except Exception as parse_err:
-                        print(f"⚠️ Failed to parse userInfo JSON: {parse_err}")
-                else:
-                    print("⚠️ localStorage 'userInfo' not found after initial login attempt.")
+                from auto_login import perform_login_on_page
+                token = perform_login_on_page(page, email, password)
+                if token:
+                    os.environ["AUTH_TOKEN"] = token
+                    print(f"✅ Token retrieved & stored for block reuse: {token[:20]}...")
 
             notified_releases = set()
             for i in range(10):
