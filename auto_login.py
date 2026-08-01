@@ -27,8 +27,19 @@ def perform_login_on_page(page, email: str, password: str) -> str:
         print("[*] Submitting login form...")
         page.click("button.green-bg")
 
-        for _ in range(12):
+        for i in range(12):
             time.sleep(1)
+            # Handle 'Suspicious activity detected' SweetAlert modal if present
+            try:
+                swal_btn = page.query_selector("button.swal2-confirm") or page.query_selector(".swal2-actions button")
+                if swal_btn and swal_btn.is_visible():
+                    print("⚠️ 'Suspicious activity' popup detected! Clicking OK & retrying login submission...")
+                    swal_btn.click()
+                    time.sleep(2)
+                    page.click("button.green-bg")
+            except Exception as swal_err:
+                print(f"⚠️ Alert popup click error: {swal_err}")
+
             user_info_raw = page.evaluate("() => localStorage.getItem('userInfo')")
             if user_info_raw:
                 try:
