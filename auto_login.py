@@ -18,7 +18,7 @@ def _generate_device_key():
 
 def _attempt_single_login(page, email: str, password: str) -> str:
     """Single login attempt combining UI interactions and direct API call."""
-    page.goto("https://ticket.cineplexbd.com/login", wait_until="networkidle", timeout=35000)
+    page.goto("https://ticket.cineplexbd.com/login", wait_until="domcontentloaded", timeout=35000)
     page.wait_for_selector("#email", timeout=15000)
     time.sleep(2)
 
