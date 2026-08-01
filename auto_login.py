@@ -8,52 +8,103 @@ import re
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-def perform_login_on_page(page, email: str, password: str) -> str:
-    """Performs login using an existing Playwright Page object and returns extracted Bearer token."""
-    print(f"[*] Navigating to https://ticket.cineplexbd.com/login ...")
-    try:
-        page.goto("https://ticket.cineplexbd.com/login", wait_until="domcontentloaded", timeout=35000)
-        page.wait_for_selector("#email", timeout=15000)
+def _generate_device_key():
+    """Generates SHA-256 device-key matching the Cineplex web app."""
+    import hashlib
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    raw_str = f"{ua}###en-US###Win32###1920x1080###Asia/Dhaka###"
+    return hashlib.sha256(raw_str.encode('utf-8')).hexdigest()
 
-        print("[*] Filling login credentials...")
-        page.locator("#email").click()
-        page.locator("#email").press_sequentially(email, delay=30)
-        page.locator("#email").dispatch_event("change")
 
-        page.locator("#password").click()
-        page.locator("#password").press_sequentially(password, delay=30)
-        page.locator("#password").dispatch_event("change")
+def _attempt_single_login(page, email: str, password: str) -> str:
+    """Single login attempt combining UI interactions and direct API call."""
+    page.goto("https://ticket.cineplexbd.com/login", wait_until="networkidle", timeout=35000)
+    page.wait_for_selector("#email", timeout=15000)
+    time.sleep(2)
 
-        print("[*] Submitting login form...")
-        page.click("button.green-bg")
+    # Fill UI form to trigger DOM/React state changes
+    page.locator("#email").click()
+    page.locator("#email").press_sequentially(email, delay=30)
+    page.locator("#password").click()
+    page.locator("#password").press_sequentially(password, delay=30)
 
-        for i in range(12):
-            time.sleep(1)
-            # Handle 'Suspicious activity detected' SweetAlert modal if present
-            try:
-                swal_btn = page.query_selector("button.swal2-confirm") or page.query_selector(".swal2-actions button")
-                if swal_btn and swal_btn.is_visible():
-                    print("⚠️ 'Suspicious activity' popup detected! Clicking OK & retrying login submission...")
-                    swal_btn.click()
-                    time.sleep(2)
-                    page.click("button.green-bg")
-            except Exception as swal_err:
-                print(f"⚠️ Alert popup click error: {swal_err}")
+    # Simulate subtle mouse movement to raise ReCAPTCHA v3 trust score
+    page.mouse.move(200, 200)
+    time.sleep(0.5)
+    page.mouse.move(400, 500)
+    time.sleep(0.5)
 
-            user_info_raw = page.evaluate("() => localStorage.getItem('userInfo')")
-            if user_info_raw:
-                try:
-                    user_info = json.loads(user_info_raw)
-                    token = user_info.get("token")
-                    if token:
-                        print("[+] AUTOMATED LOGIN SUCCESSFUL!")
-                        print(f"[+] Auth Token extracted: {token[:25]}...{token[-10:]}")
-                        return token
-                except Exception:
-                    pass
-        print("[!] Failed to extract token from localStorage.")
-    except Exception as e:
-        print(f"[!] Login execution error on page: {e}")
+    device_key = _generate_device_key()
+
+    result = page.evaluate('''async (args) => {
+        const siteKey = '6LcnBEcsAAAAAC_qfyMoEJgKLbRDZViNc3Yv79_6';
+        const recaptchaToken = await new Promise((resolve) => {
+            if (window.grecaptcha) {
+                window.grecaptcha.ready(() => {
+                    window.grecaptcha.execute(siteKey, {action: 'login'})
+                        .then(resolve).catch(() => resolve(null));
+                });
+            } else { resolve(null); }
+        });
+        if (!recaptchaToken) return {error: true, message: 'ReCAPTCHA not available'};
+
+        try {
+            const resp = await fetch('https://cineplex-ticket-api.cineplexbd.com/api/v1/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'appsource': 'web',
+                    'device-key': args.deviceKey,
+                },
+                body: JSON.stringify({
+                    email: args.email,
+                    password: args.password,
+                    recaptcha_token: recaptchaToken,
+                }),
+            });
+            return await resp.json();
+        } catch (e) {
+            return {error: true, message: e.toString()};
+        }
+    }''', {'email': email, 'password': password, 'deviceKey': device_key})
+
+    if result and result.get('code') == 200 and result.get('data'):
+        token = result['data'].get('token')
+        if token:
+            page.evaluate(f"token => localStorage.setItem('userInfo', JSON.stringify({{token: token}}))", token)
+            return token
+
+    msg = result.get('message', 'Unknown error')
+    print(f"    API response: {msg}")
+    return None
+
+
+def perform_login_on_page(page, email: str, password: str, max_attempts: int = 3) -> str:
+    """Performs login with multiple retry attempts (full page reload between each).
+    
+    ReCAPTCHA v3 often flags the first headless attempt as suspicious.
+    Like a real user, we dismiss the error, wait, and try again from scratch.
+    """
+    for attempt in range(1, max_attempts + 1):
+        print(f"[*] Login attempt {attempt}/{max_attempts} — Navigating to login page...")
+        try:
+            token = _attempt_single_login(page, email, password)
+            if token:
+                print("[+] AUTOMATED LOGIN SUCCESSFUL!")
+                print(f"[+] Auth Token extracted: {token[:25]}...{token[-10:]}")
+                return token
+            else:
+                if attempt < max_attempts:
+                    wait_secs = 5 * attempt  # 5s, 10s backoff
+                    print(f"⚠️ Login attempt {attempt} failed. Waiting {wait_secs}s before retry...")
+                    time.sleep(wait_secs)
+        except Exception as e:
+            print(f"[!] Login attempt {attempt} error: {e}")
+            if attempt < max_attempts:
+                time.sleep(5)
+
+    print("[!] All login attempts failed. Could not retrieve auth token.")
     return None
 
 def auto_login_and_get_token(email: str, password: str) -> str:
