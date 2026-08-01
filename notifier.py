@@ -86,7 +86,7 @@ class Notifier:
 
         try:
             tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            text_msg = f"🎟️ *{title}*\n\n{message}\n\n🔗 [Book Tickets Now]({link})"
+            text_msg = f"{message}\n\n🎟️ [Book Tickets Now]({link})"
             payload = {
                 "chat_id": chat_id,
                 "text": text_msg,
@@ -105,7 +105,7 @@ class Notifier:
     def notify_release(self, movie_name, location_name, show_date, booking_link="https://ticket.cineplexbd.com/home"):
         """Trigger all enabled notifications for a ticket release match."""
         title = "🎉 CINEPLEX TICKET RELEASED!"
-        msg = f"Movie: {movie_name}\nLocation: {location_name}\nDate: {show_date}\nBook Now: {booking_link}"
+        msg = f"🎉 *CINEPLEX TICKET RELEASED!*\n\n🎬 *Movie*: {movie_name}\n📍 *Location*: {location_name}\n📅 *Date*: {show_date}"
         
         print("\n" + "="*60)
         print(f"🚨 ALERT! MATCH FOUND FOR '{movie_name}' 🚨")
@@ -117,6 +117,6 @@ class Notifier:
         if self.sound_alert:
             self.trigger_audio_chime()
             
-        self.show_desktop_toast(title, msg)
+        self.show_desktop_toast(title, f"Movie: {movie_name}\nLocation: {location_name}\nDate: {show_date}")
         self.send_webhook(title, msg, booking_link)
         self.send_telegram(title, msg, booking_link)

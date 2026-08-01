@@ -186,7 +186,7 @@ def run_checker_once(notified_releases=None, page=None) -> bool:
     match_found = False
     for loc in locations:
         loc_id = loc.get("id") or loc.get("locationId") or loc.get("location_id")
-        loc_name = loc.get("name") or loc.get("locationName") or loc.get("location_name") or f"Location #{loc_id}"
+        loc_name = loc.get("locationTitle") or loc.get("location_title") or loc.get("name") or loc.get("locationName") or loc.get("location_name") or f"Location #{loc_id}"
 
         if not is_location_match(loc_name, loc_id, target_locations):
             continue
