@@ -29,15 +29,29 @@ def main():
 
     with sync_playwright() as p:
         print("[*] Launching Playwright browser...")
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage"
+            ]
+        )
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+        )
         page = context.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
 
         try:
             print("[*] Establishing Cloudflare clearance session on https://ticket.cineplexbd.com/ ...")
             try:
                 page.goto("https://ticket.cineplexbd.com/", wait_until="domcontentloaded", timeout=35000)
-                time.sleep(2)
+                time.sleep(3)
+                if "Just a moment" in page.title() or "Attention Required" in page.title():
+                    print("[*] Cloudflare challenge detected, waiting for clearance...")
+                    time.sleep(7)
             except Exception as nav_err:
                 print(f"⚠️ Page navigation warning: {nav_err}")
 

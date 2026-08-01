@@ -52,25 +52,32 @@ class CineplexAPI:
     def _post(self, endpoint: str, payload: dict = {}) -> Optional[dict]:
         url = f"{self.BASE_URL}/{endpoint}"
 
-        # If Playwright browser page is active, use in-browser page.request.post to bypass Cloudflare 403
+        # If Playwright browser page is active, execute fetch directly inside window to pass Cloudflare WAF
         if self.page:
             try:
-                response = self.page.request.post(
-                    url,
-                    data=payload,
-                    headers=self.headers,
-                    timeout=15000
-                )
-                if response.status == 200:
-                    result = response.json()
-                    if result and (result.get('code') == 401 or 'Unauthenticated' in str(result.get('message', ''))):
+                result = self.page.evaluate('''async ({url, payload, headers}) => {
+                    try {
+                        const res = await fetch(url, {
+                            method: "POST",
+                            headers: headers,
+                            body: JSON.stringify(payload)
+                        });
+                        return await res.json();
+                    } catch (e) {
+                        return { fetch_error: true, message: e.toString() };
+                    }
+                }''', {"url": url, "payload": payload, "headers": self.headers})
+
+                if result and isinstance(result, dict):
+                    if result.get('code') == 401 or 'Unauthenticated' in str(result.get('message', '')):
                         print("❌ Error 401: Authentication Token is invalid or expired!")
                         return {"error": "unauthenticated", "message": result.get('message')}
-                    return result
-                else:
-                    print(f"⚠️ Playwright request status {response.status} for {endpoint}")
+                    if not result.get('fetch_error'):
+                        return result
+                    else:
+                        print(f"⚠️ Playwright in-page fetch error: {result.get('message')}")
             except Exception as e:
-                print(f"⚠️ Playwright in-browser request error for {endpoint}: {e}")
+                print(f"⚠️ Playwright evaluate error for {endpoint}: {e}")
 
         # Fallback to requests.post
         try:
