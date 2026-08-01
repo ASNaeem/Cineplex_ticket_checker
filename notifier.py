@@ -102,6 +102,42 @@ class Notifier:
         except Exception as e:
             print(f"⚠️ Failed to send Telegram alert: {e}")
 
+    def send_auth_token_alert(self):
+        """Send Telegram notification alerting user to update their AUTH_TOKEN."""
+        if not self.telegram_bot_token or not self.telegram_chat_id:
+            return
+
+        bot_token = self.telegram_bot_token.strip()
+        chat_id = self.telegram_chat_id.strip()
+
+        if not bot_token or not chat_id or bot_token == "PASTE_YOUR_TELEGRAM_BOT_TOKEN_HERE":
+            return
+
+        try:
+            tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            text_msg = (
+                "⚠️ *Cineplex Ticket Checker Alert* ⚠️\n\n"
+                "🔑 *AUTH_TOKEN Expired or Invalid!*\n\n"
+                "Automated login was blocked by ReCAPTCHA bot protection.\n"
+                "Please copy a fresh Bearer `token` from browser DevTools and update your `AUTH_TOKEN` in GitHub Secrets / `.env` to keep receiving ticket notifications.\n\n"
+                "🎟️ [Open Cineplex Login](https://ticket.cineplexbd.com/login)"
+            )
+            payload = {
+                "chat_id": chat_id,
+                "text": text_msg,
+                "parse_mode": "Markdown",
+                "disable_web_page_preview": True
+            }
+            req = urllib.request.Request(
+                tg_url,
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'}
+            )
+            urllib.request.urlopen(req, timeout=5)
+            print("📲 Telegram AUTH_TOKEN refresh alert sent successfully!")
+        except Exception as e:
+            print(f"⚠️ Failed to send Telegram AUTH_TOKEN alert: {e}")
+
     def notify_release(self, movie_name, location_name, show_date, booking_link="https://ticket.cineplexbd.com/home"):
         """Trigger all enabled notifications for a ticket release match."""
         title = "🎉 CINEPLEX TICKET RELEASED!"

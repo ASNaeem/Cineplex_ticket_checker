@@ -186,6 +186,10 @@ def run_checker_once(notified_releases=None, page=None) -> bool:
 
     if not locations:
         print("⚠️ No locations returned.")
+        try:
+            notifier.send_auth_token_alert()
+        except Exception:
+            pass
         return False
 
     match_found = False
