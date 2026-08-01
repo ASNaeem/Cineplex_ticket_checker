@@ -13,36 +13,34 @@ def perform_login_on_page(page, email: str, password: str) -> str:
     print(f"[*] Navigating to https://ticket.cineplexbd.com/login ...")
     try:
         page.goto("https://ticket.cineplexbd.com/login", wait_until="domcontentloaded", timeout=35000)
-        page.wait_for_selector("input", timeout=15000)
+        page.wait_for_selector("#email", timeout=15000)
 
-        inputs = page.query_selector_all("input")
-        if len(inputs) >= 2:
-            print("[*] Filling login credentials...")
-            inputs[0].fill(email)
-            inputs[1].fill(password)
+        print("[*] Filling login credentials...")
+        page.locator("#email").click()
+        page.locator("#email").press_sequentially(email, delay=30)
+        page.locator("#email").dispatch_event("change")
+
+        page.locator("#password").click()
+        page.locator("#password").press_sequentially(password, delay=30)
+        page.locator("#password").dispatch_event("change")
 
         print("[*] Submitting login form...")
-        submit_btn = page.query_selector("button[type='submit']") or page.query_selector("button")
-        if submit_btn:
-            submit_btn.click()
+        page.click("button.green-bg")
 
-        time.sleep(5)
-        try:
-            page.goto("https://ticket.cineplexbd.com/home", wait_until="domcontentloaded", timeout=15000)
+        for _ in range(12):
             time.sleep(1)
-        except Exception:
-            pass
-
-        user_info_raw = page.evaluate("() => localStorage.getItem('userInfo')")
-        if user_info_raw:
-            user_info = json.loads(user_info_raw)
-            token = user_info.get("token")
-            if token:
-                print("[+] AUTOMATED LOGIN SUCCESSFUL!")
-                print(f"[+] Auth Token extracted: {token[:25]}...{token[-10:]}")
-                return token
-            else:
-                print("[!] 'userInfo' found in localStorage, but missing token.")
+            user_info_raw = page.evaluate("() => localStorage.getItem('userInfo')")
+            if user_info_raw:
+                try:
+                    user_info = json.loads(user_info_raw)
+                    token = user_info.get("token")
+                    if token:
+                        print("[+] AUTOMATED LOGIN SUCCESSFUL!")
+                        print(f"[+] Auth Token extracted: {token[:25]}...{token[-10:]}")
+                        return token
+                except Exception:
+                    pass
+        print("[!] Failed to extract token from localStorage.")
     except Exception as e:
         print(f"[!] Login execution error on page: {e}")
     return None

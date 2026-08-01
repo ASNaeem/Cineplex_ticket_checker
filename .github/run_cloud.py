@@ -34,12 +34,20 @@ def main():
         page = context.new_page()
 
         try:
-            if email and password:
+            current_token = cfg.get("auth_token", "") or os.environ.get("AUTH_TOKEN", "")
+            from cineplex_api import CineplexAPI
+            test_api = CineplexAPI(current_token, page=page)
+            locations = test_api.get_locations()
+
+            if not locations and email and password:
+                print("[*] AUTH_TOKEN missing or expired. Attempting in-browser login...")
                 from auto_login import perform_login_on_page
                 token = perform_login_on_page(page, email, password)
                 if token:
                     os.environ["AUTH_TOKEN"] = token
                     print(f"✅ Token retrieved & stored for block reuse: {token[:20]}...")
+            elif locations:
+                print("✅ Existing AUTH_TOKEN is active and valid. Reusing active token.")
 
             notified_releases = set()
             for i in range(10):
