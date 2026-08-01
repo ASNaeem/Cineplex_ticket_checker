@@ -8,6 +8,10 @@ on:
   repository_dispatch:
     types: [check_tickets]
 
+concurrency:
+  group: cineplex-ticket-checker
+  cancel-in-progress: true
+
 jobs:
   check-tickets:
     runs-on: ubuntu-latest
