@@ -42,6 +42,10 @@ def load_config() -> dict:
             return val.strip()
         return default
 
+    checker_enabled = get_var("CHECKER_ENABLED")
+    if checker_enabled:
+        config["CHECKER_ENABLED"] = checker_enabled
+
     auth_token = get_var("AUTH_TOKEN")
     if auth_token:
         config["auth_token"] = auth_token
@@ -139,6 +143,11 @@ def run_checker_once(notified_releases=None, page=None) -> bool:
         notified_releases = set()
 
     config = load_config()
+    checker_enabled = str(config.get("CHECKER_ENABLED", os.environ.get("CHECKER_ENABLED", "true"))).lower()
+    if checker_enabled in ["false", "0", "off", "paused", "no", "disabled"]:
+        print("⏸️ Ticket Checker is currently PAUSED. (Set CHECKER_ENABLED=true in GitHub Secrets/Vars or .env to resume.)")
+        return False
+
     auth_token = config.get("auth_token", "")
     email = config.get("CINEPLEX_EMAIL", "")
     password = config.get("CINEPLEX_PASSWORD", "")
@@ -225,8 +234,16 @@ def run_checker_once(notified_releases=None, page=None) -> bool:
 
     return match_found
 
-def run_checker():
+def main():
     config = load_config()
+    checker_enabled = str(config.get("CHECKER_ENABLED", os.environ.get("CHECKER_ENABLED", "true"))).lower()
+    if checker_enabled in ["false", "0", "off", "paused", "no", "disabled"]:
+        print("=====================================================")
+        print(" ⏸️  Cineplex Ticket Checker is PAUSED")
+        print("=====================================================")
+        print("Set CHECKER_ENABLED=true in .env or GitHub Secrets to resume.\n")
+        return
+
     check_interval = config.get("check_interval_seconds", 30)
 
     print("\n🎬 =====================================================")
@@ -269,6 +286,6 @@ def run_checker():
 
 if __name__ == "__main__":
     try:
-        run_checker()
+        main()
     except KeyboardInterrupt:
-        print("\n👋 Ticket checker stopped by user.")
+        print("\n🛑 Cineplex Ticket Checker stopped by user.")
